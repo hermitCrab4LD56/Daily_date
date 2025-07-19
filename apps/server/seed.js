@@ -37,15 +37,19 @@ const seedDatabase = async () => {
         
         await db.query("INSERT INTO bracelets (nfc_uid, status) VALUES ($1, 'active')", [nfcUid]);
         
-        const { rows: [user] } = await db.query(
-            "INSERT INTO users (name, gender, birthdate, wechat_id, bio, nfc_uid, status) VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING *",
-            [userData.name, userData.gender, userData.birthdate, userData.wechat_id, userData.bio, nfcUid]
-        );
+        // 在 INSERT 语句中增加了 is_matchable 字段
+        const insertQuery = `
+            INSERT INTO users (name, gender, birthdate, wechat_id, bio, nfc_uid, status, is_matchable) 
+            VALUES ($1, $2, $3, $4, $5, $6, 'active', true) 
+            RETURNING *
+        `;
+        const { rows: [user] } = await db.query(insertQuery, [
+            userData.name, userData.gender, userData.birthdate, userData.wechat_id, userData.bio, nfcUid
+        ]);
         
-        console.log(`用户 ${user.name} (NFC: ${nfcUid}) 已创建。`);
-
+        console.log(`用户 ${user.name} (NFC: ${nfcUid}) 已创建，is_matchable 设置为 true。`);
         // 2. 为每个用户生成初始运势和匹配
-        await generateNewFortune(user);
+        // await generateNewFortune(user);
     }
 
     console.log('数据填充完毕！');

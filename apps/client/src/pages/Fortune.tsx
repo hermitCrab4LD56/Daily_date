@@ -58,10 +58,15 @@ const FortunePage: React.FC<{ nfcUid: string | null }> = ({ nfcUid }) => {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-100 p-4">
-            <div className="flex-1">{content}</div>
-            <div className="mt-4 p-3 text-center text-gray-500 bg-gray-200 rounded-full">
-                对话功能暂未开放，敬请期待~
+        // --- CORE FIX: Added a container to constrain width and center the content ---
+        <div className="max-w-sm mx-auto bg-gray-100 min-h-screen flex flex-col">
+            <div className="flex-1 p-4">
+                {content}
+            </div>
+            <div className="p-4">
+                <div className="p-3 text-center text-gray-500 bg-gray-200 rounded-full">
+                    对话功能暂未开放，敬请期待~
+                </div>
             </div>
         </div>
     );
