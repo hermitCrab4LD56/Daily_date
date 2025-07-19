@@ -1,0 +1,2 @@
+### 直接测试后端 GET /api/fortune 接口
+GET http://localhost:3001/api/fortune?nfcUid=SOME-NEW-UID-12345

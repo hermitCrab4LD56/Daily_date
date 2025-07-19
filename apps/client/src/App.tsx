@@ -1,49 +1,86 @@
 // 文件路径: apps/client/src/App.tsx
-
-import React, { useEffect, useState } from 'react';
-import { Chat } from '../components/Chat';
-import { useChat } from '../hooks/useChat';
+import React, { useState, useEffect,useCallback } from 'react';
+import RegistrationPage from './pages/Registration';
+import FortunePage from './pages/Fortune';
 
 function App(): React.JSX.Element {
-  // 使用一个 state 来存储从 URL 获取的 nfcUid
+  const [userStatus, setUserStatus] = useState<'loading' | 'new' | 'existing' | 'invalid'>('loading');
   const [nfcUid, setNfcUid] = useState<string | null>(null);
 
-  // 直接在顶层组件使用钩子，管理所有状态和逻辑
-  const { msgs, send, isLoading, setMsgs } = useChat(nfcUid);
+  // 使用 useCallback 封装状态检查逻辑，方便复用
+  const checkUserStatus = useCallback(async (uid: string) => {
+    setUserStatus('loading');
+    try {
+      const response = await fetch(`/api/fortune?nfcUid=${uid}`);
 
-  // 使用 useEffect 来处理 URL 参数和触发欢迎消息的副作用
-  useEffect(() => {
-    // 1. 从 URLSearchParams 解析 nfcUid
-    const uidFromUrl = new URLSearchParams(window.location.search).get('nfcUid');
-
-    if (uidFromUrl) {
-      setNfcUid(uidFromUrl); // 设置 nfcUid，以便后续 send 函数可以携带它
-
-      // 2. 检查本地是否已有聊天记录，如果没有，则发送欢迎消息
-      const existingState = localStorage.getItem('chat_state');
-      const hasHistory = existingState && JSON.parse(existingState).length > 0;
-      
-      if (!hasHistory) {
-        // 3. 使用从钩子中获取的 setMsgs 来添加第一条 bot 消息
-        setMsgs([
-          {
-            role: 'bot',
-            text: '有邀请码就发，没有我来问几个问题～'
-          }
-        ]);
+      // Case 1: 用户不存在，后端返回 404
+      if (response.status === 404) {
+        setUserStatus('new');
+        return;
       }
-    }
-  // 空依赖数组 [] 确保这个 effect 只在组件首次挂载时运行一次
-  }, [setMsgs]);
 
-  return (
-    // 将状态和方法作为 props 传递给纯 UI 的 Chat 组件
-    <Chat 
-      msgs={msgs} 
-      send={send} 
-      isLoading={isLoading} 
-    />
-  );
+      // Case 2: 其他非成功状态码（例如 500 Internal Server Error）
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}`);
+      }
+
+      // Case 3: 成功，但需要验证响应体是否为 JSON
+      // 克隆响应，因为 .json() 会消耗响应体
+      const responseClone = response.clone();
+      try {
+        await responseClone.json(); // 尝试解析
+        setUserStatus('existing'); // 解析成功，是老用户
+      } catch (jsonError) {
+        // 解析失败，说明返回的不是 JSON（可能是 HTML 错误页）
+        console.error("API response was not valid JSON.", jsonError);
+        setUserStatus('new'); // 将其视为新用户，引导至注册页
+      }
+    } catch (err) {
+      console.error("Failed to fetch user status:", err);
+      setUserStatus('new'); // 网络错误等，也引导至注册页
+    }
+  }, []);
+
+   useEffect(() => {
+    const uidFromUrl = new URLSearchParams(window.location.search).get('nfcUid');
+    if (uidFromUrl) {
+      setNfcUid(uidFromUrl);
+      checkUserStatus(uidFromUrl);
+    } else {
+      setUserStatus('invalid'); // 或显示错误页
+    }
+  }, [checkUserStatus]);
+
+  // 核心改动：注册成功后的处理函数
+  const handleRegistrationSuccess = () => {
+    if (nfcUid) {
+      checkUserStatus(nfcUid);
+    }
+  };
+
+
+  if (userStatus === 'loading') {
+    return <div className="text-center p-10">正在加载...</div>;
+  }
+  
+  // 新增：渲染引导/错误页面
+  if (userStatus === 'invalid') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100 text-center p-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">访问方式不正确</h1>
+          <p className="text-gray-600 mt-2">请通过 NFC 手环触碰来访问此页面。</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 将 handleRegistrationSuccess 函数作为 prop 传递下去
+  if (userStatus === 'new') {
+    return <RegistrationPage nfcUid={nfcUid} onRegistrationSuccess={handleRegistrationSuccess} />;
+  }
+
+  return <FortunePage nfcUid={nfcUid} />;
 }
 
 export default App;
