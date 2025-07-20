@@ -13,18 +13,24 @@ function App(): React.JSX.Element {
     try {
       const response = await fetch(`/api/fortune?nfcUid=${uid}`);
 
-      // Case 1: 用户不存在，后端返回 404
+      if (response.status === 403) {
+        // 403 代表 nfcUid 无效
+        setUserStatus('invalid');
+        return;
+      }
+
+      // 用户不存在，后端返回 404
       if (response.status === 404) {
         setUserStatus('new');
         return;
       }
 
-      // Case 2: 其他非成功状态码（例如 500 Internal Server Error）
+      // 其他非成功状态码（例如 500 Internal Server Error）
       if (!response.ok) {
         throw new Error(`API returned status ${response.status}`);
       }
 
-      // Case 3: 成功，但需要验证响应体是否为 JSON
+      // 成功，但需要验证响应体是否为 JSON
       // 克隆响应，因为 .json() 会消耗响应体
       const responseClone = response.clone();
       try {

@@ -1,7 +1,7 @@
 // 文件路径: apps/server/index.js (最终版)
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const config = require('./config'); // 引入中央配置
 
 const apiRoutes = require('./routes/api');
 

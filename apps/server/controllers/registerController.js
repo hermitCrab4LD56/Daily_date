@@ -7,20 +7,18 @@ const handleFormRegistration = async (req, res) => {
     const { nfcUid, name, gender, birthdate, wechat_id, bio, is_matchable } = req.body;
 
     if (!nfcUid || !name || !gender || !wechat_id) {
-        return res.status(400).json({ error: 'Required fields are missing.' });
+        return res.status(400).json({ error: '请填写必填项！' });
     }
 
     try {
-        // --- CORE FIX: The order of these two blocks has been swapped ---
-
-        // Step 1 (Corrected): First, create the record in the 'bracelets' table.
+        // Step 1: First, create the record in the 'bracelets' table.
         // This ensures the foreign key will exist for the 'users' table.
         await db.query(
             "INSERT INTO bracelets (nfc_uid, status) VALUES ($1, 'active') ON CONFLICT (nfc_uid) DO UPDATE SET status = 'active'",
             [nfcUid]
         );
 
-        // Step 2 (Corrected): Now, create the new user, which references the bracelet.
+        // Step 2: Now, create the new user, which references the bracelet.
         const insertUserQuery = `
             INSERT INTO users (name, gender, birthdate, wechat_id, bio, is_matchable, nfc_uid, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
@@ -44,7 +42,7 @@ const handleFormRegistration = async (req, res) => {
     } catch (error) {
         console.error('Registration failed:', error);
         if (error.code === '23505') { // Unique violation
-            return res.status(409).json({ error: 'This WeChat ID has already been registered.' });
+            return res.status(409).json({ error: '该微信号已被注册过！' });
         }
         res.status(500).json({ error: 'Internal server error' });
     }

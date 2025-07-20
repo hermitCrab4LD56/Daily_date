@@ -3,37 +3,42 @@ const db = require('../db');
 const { generateNewFortune } = require('../services/fortuneService');
 
 const getFortune = async (req, res) => {
+    // Express 会自动处理 async 函数中的异常，并传递给错误处理中间件
     const { nfcUid } = req.query;
-    if (!nfcUid) return res.status(400).json({ error: 'nfcUid is required' });
+    if (!nfcUid) {
+        return res.status(400).json({ error: 'nfcUid is required' });
+    }
 
+    // 验证 nfcUid 是否有效
+    const { rows: [bracelet] } = await db.query("SELECT * FROM bracelets WHERE nfc_uid = $1", [nfcUid]);
+
+    if (!bracelet) {
+        console.warn(`检测到无效的 NFC UID 访问: ${nfcUid}`);
+        return res.status(403).json({ error: 'Invalid NFC UID. Please use an official tag.' });
+    }
+    
+    // 检查用户是否已注册
     const { rows: [user] } = await db.query("SELECT * FROM users WHERE nfc_uid = $1 AND status = 'active'", [nfcUid]);
     
     if (user) {
+        // 已存在用户
         const now = new Date();
         const lastFortuneDate = user.last_fortune_at ? new Date(user.last_fortune_at) : null;
-
-        // 计算今天和昨天的早上8点
+        
         const today8AM = new Date();
         today8AM.setHours(8, 0, 0, 0);
-        const yesterday8AM = new Date(today8AM);
-        yesterday8AM.setDate(today8AM.getDate() - 1);
 
-        // 判断是否需要生成新消息的条件：
-        // 1. 从未生成过消息 (lastFortuneDate is null)
-        // 2. 当前时间已过今天8点，但上次生成是在今天8点之前
         const needsUpdate = !lastFortuneDate || (now >= today8AM && lastFortuneDate < today8AM);
 
         if (needsUpdate) {
-            // b) 需要更新，生成新内容
             const newMessage = await generateNewFortune(user);
             return res.json({ message: newMessage });
         } else {
-            // a) 不需要更新，返回缓存内容
             console.log(`用户 ${user.id} 在刷新周期内访问，返回缓存消息。`);
             return res.json({ message: user.last_fortune_message });
         }
-
     } else {
+        // 新用户
         return res.status(404).json({ error: 'User not found. Please register.' });
     }
 };

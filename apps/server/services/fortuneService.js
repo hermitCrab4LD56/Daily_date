@@ -1,11 +1,10 @@
-// 文件路径: apps/server/services/fortuneService.js (最终修复版)
+// 文件路径: apps/server/services/fortuneService.js 
 
 const db = require('../db');
 const { ZhipuAI } = require('zhipuai');
 // 从 undici 库中导入 fetch 函数
 const { fetch } = require('undici');
 
-// --- 核心修复点 ---
 // 在初始化 ZhipuAI 客户端时，手动传入 fetch 实现
 const client = new ZhipuAI({
   apiKey: process.env.ZHIPU_API_KEY,
@@ -13,7 +12,7 @@ const client = new ZhipuAI({
 });
 
 
-// --- 辅助函数 1: 调用 LLM 生成消息 (现在使用修复后的 SDK client) ---
+// --- 辅助函数 1: 调用 LLM 生成消息 ---
 const getFortuneFromLLM = async (user1, user2) => {
     console.log(`[SDK] 正在为 ${user1.name} 和 ${user2.name} 生成专属欢迎语...`);
     
@@ -22,26 +21,24 @@ const getFortuneFromLLM = async (user1, user2) => {
       你的任务是为两位刚刚被系统匹配到的用户生成一段温暖、有趣、且个性化的欢迎语。
 
       这是两位用户的信息：
-      - 主用户 (User 1): { "name": "${user1.name}", "gender": "${user1.gender}", "bio": "${user1.bio}" }
-      - 匹配用户 (User 2): { "name": "${user2.name}", "gender": "${user2.gender}", "bio": "${user2.bio}" }
+      - 主用户 (User 1): { "name": "${user1.name}", "wechat_id": "${user1.wechat_id}", "bio": "${user1.bio}" }
+      - 匹配用户 (User 2): { "name": "${user2.name}", "wechat_id": "${user2.wechat_id}", "bio": "${user2.bio}" }
 
       请严格按照以下要求和格式输出：
       1.  欢迎语必须包含两部分，并用 "|||" 作为唯一分隔符。
       2.  第一部分：直接对主用户 User 1 的问候，必须在问候中提到匹配用户 User 2 的名字。
       3.  第二部分：一段巧妙结合两人 "bio" (自我介绍) 的共同欢迎语，要显得自然、真诚，并鼓励他们开启对话。
       4.  风格要求：温暖、积极、略带文采，避免尴尬和陈词滥调。
-      5.  输出格式：严格遵循 "第一部分的问候|||第二部分的共同欢迎语" 的格式，不要添加任何其他无关的文字或解释。
-    `;
+      5.  输出格式：严格遵循 "第一部分的问候|||第二部分的共同欢迎语" 的格式，不要添加任何其他无关的文字或解释。    `;
 
     try {
-        // 使用我们修复后的 client 实例
         const response = await client.chat.completions.create({
             model: "glm-3-turbo",
             messages: [{ "role": "user", "content": prompt }],
         });
 
         const llmResult = response.choices[0].message.content;
-        console.log(`[SDK] 收到模型返回结果: ${llmResult}`);
+        console.log(`[LLM] 收到模型返回结果: ${llmResult}`);
 
         if (llmResult && llmResult.includes('|||')) {
             const parts = llmResult.split('|||');
@@ -50,7 +47,7 @@ const getFortuneFromLLM = async (user1, user2) => {
             throw new Error('LLM response format is invalid.');
         }
     } catch (error) {
-        console.error("[SDK] 调用智谱 AI API 失败:", error);
+        console.error("[LLM] 调用智谱 AI API 失败:", error);
         // Fallback
         const greeting = `你好，${user1.name}！今天为你匹配到同样热爱生活的 ${user2.name}。`;
         const welcome = `“${user1.bio}”\n与\n“${user2.bio}”\n\n你们的相遇，如同代码与诗篇的碰撞，愿你们都能从中发现新的乐趣。`;
@@ -61,7 +58,7 @@ const getFortuneFromLLM = async (user1, user2) => {
 // --- 辅助函数 2: 查找匹配用户 (包含最新算法) ---
 const findMatchForUser = async (user) => {
   const query = `
-    SELECT u.id, u.name, u.gender, u.bio
+    SELECT u.id, u.name, u.gender, u.bio, u.wechat_id
     FROM users u
     WHERE
       u.id != $1
@@ -114,8 +111,9 @@ const generateNewFortune = async (user) => {
     await recordMatch(user.id, match.id);
     
     // 调用 LLM 生成欢迎语
-    const fortuneMessage = await getFortuneFromLLM(user, match);
-    
+    const creativeWelcome  = await getFortuneFromLLM(user, match);
+    const userCard = `------\n💖 你今日的福缘之人 💖\n昵称：${match.name}\n简介：${match.bio}\n微信ID：${match.wechat_id}`;
+    const fortuneMessage = `${creativeWelcome}\n\n${userCard}`;
     // 将生成的消息和时间存入数据库
     await db.query("UPDATE users SET last_fortune_message = $1, last_fortune_at = NOW() WHERE id = $2", [fortuneMessage, user.id]);
     
